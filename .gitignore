@@ -30,3 +30,7 @@ Thumbs.db
 
 # Generated report
 /report.pdf
+
+# Large retail datasets
+data/raw/online_retail_II.csv
+data/processed/cleaned_data.csv
