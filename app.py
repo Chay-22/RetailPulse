@@ -29,7 +29,14 @@ st.set_page_config(page_title="RetailPulse", layout="wide")
 
 @st.cache_data
 def load_data():
-    return load_and_clean_data("data/raw/online_retail_II.csv")
+    default_path = "data/sample/online_retail_sample.csv"
+
+    if not os.path.exists(default_path):
+        raise FileNotFoundError(
+            f"Default sample dataset not found: {default_path}"
+        )
+
+    return load_and_clean_data(default_path)
 
 
 @st.cache_data
