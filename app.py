@@ -4,7 +4,6 @@ import sys
 import streamlit as st
 import plotly.express as px
 import pandas as pd
-from io import BytesIO
 
 # Ensure the app root is on sys.path so src package imports resolve correctly.
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
@@ -40,11 +39,14 @@ def load_data():
 
 
 @st.cache_data
-def load_uploaded_data(file_bytes, file_name):
+def load_uploaded_data(uploaded_file):
+    """Load and clean an uploaded retail dataset without duplicating file bytes."""
+    file_name = uploaded_file.name
+
     if file_name.lower().endswith(".csv"):
-        raw_df = pd.read_csv(BytesIO(file_bytes), encoding="ISO-8859-1")
+        raw_df = pd.read_csv(uploaded_file, encoding="ISO-8859-1")
     elif file_name.lower().endswith((".xlsx", ".xls")):
-        raw_df = pd.read_excel(BytesIO(file_bytes))
+        raw_df = pd.read_excel(uploaded_file)
     else:
         raise ValueError("Upload a CSV or Excel file.")
 
@@ -74,10 +76,7 @@ if data_source == "Upload new dataset":
         st.stop()
 
     try:
-        df = load_uploaded_data(
-            uploaded_file.getvalue(),
-            uploaded_file.name,
-        )
+        df = load_uploaded_data(uploaded_file)
         st.sidebar.success(f"Cleaned uploaded dataset: {len(df):,} rows ready.")
     except Exception as exc:
         st.error(f"Could not clean uploaded dataset: {exc}")

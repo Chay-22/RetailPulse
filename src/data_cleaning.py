@@ -15,8 +15,7 @@ REQUIRED_COLUMNS = [
 
 
 def clean_retail_data(df):
-    df = df.copy()
-
+    """Clean retail transaction data with reduced memory overhead."""
     missing_columns = [
         column for column in REQUIRED_COLUMNS
         if column not in df.columns
@@ -27,23 +26,48 @@ def clean_retail_data(df):
             "Missing required columns: " + ", ".join(missing_columns)
         )
 
-    df = df.dropna(subset=['Customer ID'])
-    df['Description'] = df['Description'].fillna('Unknown')
-    df = df.drop_duplicates()
+    # Remove invalid transactions before creating derived columns.
+    df.dropna(subset=["Customer ID"], inplace=True)
+    df["Description"] = df["Description"].fillna("Unknown")
+    df.drop_duplicates(inplace=True)
 
-    df = df[df['Quantity'] > 0]
-    df = df[df['Price'] > 0]
+    df.drop(df.index[df["Quantity"] <= 0], inplace=True)
+    df.drop(df.index[df["Price"] <= 0], inplace=True)
 
-    df = df[~df['Invoice'].astype(str).str.startswith('C')]
+    invoice_text = df["Invoice"].astype(str)
+    df.drop(df.index[invoice_text.str.startswith("C")], inplace=True)
 
-    df['InvoiceDate'] = pd.to_datetime(df['InvoiceDate'])
-    df['Customer ID'] = df['Customer ID'].astype(int)
+    df["InvoiceDate"] = pd.to_datetime(df["InvoiceDate"])
 
-    df['TotalPrice'] = df['Quantity'] * df['Price']
+    df["Customer ID"] = pd.to_numeric(
+        df["Customer ID"],
+        errors="coerce",
+        downcast="integer",
+    )
+    df.dropna(subset=["Customer ID"], inplace=True)
+    df["Customer ID"] = df["Customer ID"].astype("int32")
 
-    df['Year'] = df['InvoiceDate'].dt.year
-    df['Month'] = df['InvoiceDate'].dt.month
-    df['Hour'] = df['InvoiceDate'].dt.hour
+    df["Quantity"] = pd.to_numeric(
+        df["Quantity"],
+        errors="coerce",
+        downcast="integer",
+    )
+
+    df["Price"] = pd.to_numeric(
+        df["Price"],
+        errors="coerce",
+        downcast="float",
+    )
+
+    # Repeated text values are memory-heavy for large transaction datasets.
+    for column in ("StockCode", "Description", "Country"):
+        df[column] = df[column].astype("category")
+
+    df["TotalPrice"] = df["Quantity"] * df["Price"]
+
+    df["Year"] = df["InvoiceDate"].dt.year.astype("int16")
+    df["Month"] = df["InvoiceDate"].dt.month.astype("int8")
+    df["Hour"] = df["InvoiceDate"].dt.hour.astype("int8")
 
     return df
 
