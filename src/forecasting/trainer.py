@@ -17,6 +17,7 @@ Features
 import os
 import time
 import logging
+import hashlib
 
 import torch
 import torch.nn as nn
@@ -142,10 +143,9 @@ class LSTMTrainer:
         # -----------------------------
         # Mixed Precision
 
-        self.scaler = torch.cuda.amp.GradScaler(
-
-            enabled=torch.cuda.is_available()
-
+        self.scaler = torch.amp.GradScaler(
+            "cuda",
+            enabled=torch.cuda.is_available(),
         )
 
         # -----------------------------
@@ -257,8 +257,9 @@ class LSTMTrainer:
 
             self.optimizer.zero_grad()
 
-            with torch.cuda.amp.autocast(
-                enabled=torch.cuda.is_available()
+            with torch.amp.autocast(
+                device_type="cuda",
+                enabled=torch.cuda.is_available(),
             ):
 
                 predictions = self.model(X_batch)
@@ -465,6 +466,11 @@ class LSTMTrainer:
             )
 
             return False
+
+        finally:
+            # Release the deserialized checkpoint immediately.
+            if "checkpoint" in locals():
+                del checkpoint
     
     # ---------------------------------------------------
     # Check Retraining Requirement
@@ -487,37 +493,57 @@ class LSTMTrainer:
         ):
             return True
 
-        checkpoint = torch.load(
-            self.checkpoint_path,
-            map_location="cpu",
-        )
+        checkpoint = None
 
-        metadata = checkpoint.get(
-            "metadata",
-            {}
-        )
-
-        old_hash = metadata.get(
-            "dataset_hash"
-        )
-
-        new_hash = self.dataset_hash(
-            scaled_series
-        )
-
-        if old_hash != new_hash:
-
-            logger.info(
-                "Dataset changed. Retraining required."
+        try:
+            checkpoint = torch.load(
+                self.checkpoint_path,
+                map_location="cpu",
             )
 
+            if not isinstance(checkpoint, dict):
+                logger.warning(
+                    "Invalid checkpoint format. Retraining required."
+                )
+                return True
+
+            metadata = checkpoint.get(
+                "metadata",
+                {}
+            )
+
+            old_hash = metadata.get(
+                "dataset_hash"
+            )
+
+            new_hash = self.dataset_hash(
+                scaled_series
+            )
+
+            if old_hash != new_hash:
+
+                logger.info(
+                    "Dataset changed. Retraining required."
+                )
+
+                return True
+
+            logger.info(
+                "Existing model matches dataset."
+            )
+
+            return False
+
+        except Exception as exc:
+            logger.warning(
+                "Unable to inspect existing checkpoint; retraining required: %s",
+                exc,
+            )
             return True
 
-        logger.info(
-            "Existing model matches dataset."
-        )
-
-        return False
+        finally:
+            # Only metadata is needed here; release the full checkpoint.
+            del checkpoint
 
 
     # ---------------------------------------------------

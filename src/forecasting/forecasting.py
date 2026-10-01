@@ -20,6 +20,7 @@ Features
 
 from __future__ import annotations
 
+import gc
 import hashlib
 import logging
 import os
@@ -206,11 +207,15 @@ def _run_prophet(
 
     prophet = ProphetForecast()
 
-    return prophet.run(
-        train_df=daily,
-        periods=horizon,
-        retrain=retrain,
-    )
+    try:
+        return prophet.run(
+            train_df=daily,
+            periods=horizon,
+            retrain=retrain,
+        )
+    finally:
+        del prophet
+        gc.collect()
 
 
 # ---------------------------------------------------------
@@ -543,6 +548,12 @@ def forecast(
                 horizon=horizon,
             )
 
+            del daily
+            del scaler
+            del scaled
+            del prophet_forecast
+            gc.collect()
+
             logger.info(
                 "Forecast pipeline completed successfully without LSTM."
             )
@@ -571,7 +582,12 @@ def forecast(
             scaled,
             horizon,
         )
-            # -------------------------------------
+
+        # Trainer is no longer needed after the prediction sequence is built.
+        del trainer
+        gc.collect()
+
+        # -------------------------------------
         # Ensemble
         # -------------------------------------
 
@@ -588,6 +604,10 @@ def forecast(
         lower, upper = predictor.confidence_interval(
             final_forecast
         )
+
+        # Predictor is no longer needed after confidence estimation.
+        del predictor
+        gc.collect()
 
         # -------------------------------------
         # Forecast DataFrame
@@ -612,6 +632,17 @@ def forecast(
             prophet_forecast=prophet_forecast,
             horizon=horizon,
         )
+
+        # Release intermediate objects before returning to Streamlit.
+        del daily
+        del scaler
+        del scaled
+        del prophet_forecast
+        del lstm_forecast
+        del final_forecast
+        del lower
+        del upper
+        gc.collect()
 
         logger.info(
             "Forecast pipeline completed successfully."

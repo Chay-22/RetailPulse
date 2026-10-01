@@ -15,7 +15,6 @@ Features
 
 
 import os
-from functools import lru_cache
 import logging
 import numpy as np
 import torch
@@ -28,13 +27,6 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger(__name__)
-
-@lru_cache(maxsize=1)
-def _cached_checkpoint(path, device):
-    return torch.load(
-        path,
-        map_location=device
-    )
 
 class LSTMPredictor:
 
@@ -78,22 +70,31 @@ class LSTMPredictor:
                 f"LSTM checkpoint not found: {model_path}"
             )
 
-        checkpoint = _cached_checkpoint(
-            model_path,
-            self.device
-        )
+        checkpoint = None
 
-        self.model.load_state_dict(
-
-            checkpoint["model_state_dict"]
-
-        )
-
-        if "model_state_dict" not in checkpoint:
-
-            raise RuntimeError(
-                "Invalid checkpoint."
+        try:
+            checkpoint = torch.load(
+                model_path,
+                map_location=self.device,
             )
+
+            if not isinstance(checkpoint, dict):
+                raise RuntimeError(
+                    "Invalid LSTM checkpoint format."
+                )
+
+            if "model_state_dict" not in checkpoint:
+                raise RuntimeError(
+                    "Invalid checkpoint: model_state_dict is missing."
+                )
+
+            self.model.load_state_dict(
+                checkpoint["model_state_dict"]
+            )
+
+        finally:
+            # Release the full checkpoint after loading model weights.
+            del checkpoint
 
         self.model.eval()
 
@@ -161,7 +162,7 @@ class LSTMPredictor:
 
             x = x.to(self.device)
 
-            with torch.no_grad():
+            with torch.inference_mode():
 
                 pred = self.model(x)
 

@@ -34,24 +34,40 @@ def aggregate_daily_sales(
     Convert transactional data into daily sales.
     """
 
-    data = df.copy()
+    # Select only the two columns required by forecasting.
+    # This avoids copying the complete transaction dataframe.
+    data = df[[date_col, value_col]].copy()
 
-    data[date_col] = pd.to_datetime(data[date_col],errors="coerce")
+    data[date_col] = pd.to_datetime(
+        data[date_col],
+        errors="coerce",
+    )
+    data[value_col] = pd.to_numeric(
+        data[value_col],
+        errors="coerce",
+    )
+
     data = data.dropna(
-        subset=[date_col]
+        subset=[date_col, value_col]
     )
 
     daily = (
-        data.groupby(data[date_col].dt.date)[value_col]
+        data.groupby(
+            data[date_col].dt.date,
+            sort=True,
+            observed=True,
+        )[value_col]
         .sum()
         .reset_index()
     )
+
+    del data
 
     daily.columns = ["ds", "y"]
 
     daily["ds"] = pd.to_datetime(daily["ds"])
 
-    daily = daily.sort_values("ds")
+    daily = daily.sort_values("ds").reset_index(drop=True)
 
     return daily
 

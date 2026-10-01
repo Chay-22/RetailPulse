@@ -147,7 +147,7 @@ if menu == "Overview":
 
     # Country Contribution
     st.subheader("Revenue by Country")
-    country = df.groupby('Country')['TotalPrice'].sum().nlargest(10).reset_index()
+    country = df.groupby('Country', observed=True)['TotalPrice'].sum().nlargest(10).reset_index()
     st.plotly_chart(px.bar(country, x="Country", y="TotalPrice"))
 
     # Alerts
@@ -169,7 +169,7 @@ elif menu == "Sales":
 
     # Top Products
     st.subheader("Top Products")
-    top = df.groupby('Description')['Quantity'].sum().nlargest(10).reset_index()
+    top = df.groupby('Description', observed=True)['Quantity'].sum().nlargest(10).reset_index()
     st.plotly_chart(px.bar(top, x="Quantity", y="Description", orientation='h'))
 
     # Hourly Sales
